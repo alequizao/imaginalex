@@ -1,7 +1,9 @@
+
 // src/components/image-generator-client.tsx
 "use client";
 
-import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
+import { useState, useEffect, type ChangeEvent, type FormEvent, useRef } from 'react';
+import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -10,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { generateImageWithDetailPrompts, type DetailPromptInput } from '@/ai/flows/detail-prompt';
 import ImageGalleryClient from './image-gallery-client';
 import type { GeneratedItem } from './generated-image-card-client';
-import { Sparkles, Plus, X, Loader2, Wand2 } from 'lucide-react';
+import { Sparkles, Plus, X, Loader2, Wand2, UploadCloud } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from '@/components/ui/textarea';
 
@@ -23,6 +25,9 @@ const ImageGeneratorClient = () => {
   const [detailPrompts, setDetailPrompts] = useState<string[]>([]);
   const [generatedItems, setGeneratedItems] = useState<GeneratedItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
+  const [uploadedImageDataUri, setUploadedImageDataUri] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -61,12 +66,35 @@ const ImageGeneratorClient = () => {
     localStorage.setItem(LOCAL_STORAGE_DETAIL_PROMPTS_KEY, JSON.stringify(newDetailPrompts));
   };
 
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadedImagePreview(reader.result as string);
+        setUploadedImageDataUri(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setUploadedImagePreview(null);
+      setUploadedImageDataUri(null);
+    }
+  };
+
+  const handleClearUploadedImage = () => {
+    setUploadedImagePreview(null);
+    setUploadedImageDataUri(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const handleGenerateImage = async (e: FormEvent) => {
     e.preventDefault();
     if (!primaryPrompt.trim()) {
       toast({
         title: "Prompt Primário Necessário",
-        description: "Por favor, insira um prompt primário para gerar a imagem.",
+        description: "Por favor, insira um prompt primário para gerar ou editar a imagem.",
         variant: "destructive",
       });
       return;
@@ -77,6 +105,7 @@ const ImageGeneratorClient = () => {
       const input: DetailPromptInput = {
         primaryPrompt,
         detailPrompts,
+        uploadedImage: uploadedImageDataUri || undefined,
       };
       const result = await generateImageWithDetailPrompts(input);
       setGeneratedItems(prevItems => [
@@ -84,14 +113,14 @@ const ImageGeneratorClient = () => {
         ...prevItems,
       ]);
       toast({
-        title: "Imagem Gerada!",
-        description: "Sua imagem foi criada com sucesso.",
+        title: "Imagem Processada!",
+        description: `Sua imagem foi ${uploadedImageDataUri ? 'editada' : 'gerada'} com sucesso.`,
       });
     } catch (error) {
-      console.error("Error generating image:", error);
+      console.error("Error processing image:", error);
       toast({
-        title: "Erro ao Gerar Imagem",
-        description: "Ocorreu um problema ao gerar a imagem. Tente novamente.",
+        title: "Erro ao Processar Imagem",
+        description: "Ocorreu um problema ao processar a imagem. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -105,10 +134,10 @@ const ImageGeneratorClient = () => {
         <CardHeader>
           <CardTitle className="text-2xl flex items-center gap-2 text-primary">
             <Wand2 className="h-6 w-6" />
-            Criador de Imagens IA
+            Criador e Editor de Imagens IA
           </CardTitle>
           <CardDescription>
-            Defina seu prompt primário e adicione detalhes para criar imagens únicas.
+            Defina seu prompt primário, adicione detalhes e opcionalmente carregue uma imagem para edição.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -164,13 +193,51 @@ const ImageGeneratorClient = () => {
               )}
             </div>
 
+            <div>
+              <Label htmlFor="image-upload" className="text-lg font-medium text-foreground">
+                Editar Imagem Existente (Opcional)
+              </Label>
+              <div className="mt-2 flex items-center gap-2 p-4 border-2 border-dashed border-border rounded-lg hover:border-primary transition-colors">
+                <UploadCloud className="h-8 w-8 text-muted-foreground"/>
+                <Input
+                  id="image-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  ref={fileInputRef}
+                  className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                />
+              </div>
+              {uploadedImagePreview && (
+                <div className="mt-4 space-y-3 p-4 border rounded-md bg-muted/20">
+                  <p className="text-sm font-medium text-foreground">Pré-visualização da Imagem Carregada:</p>
+                  <div className="relative w-full max-w-sm mx-auto aspect-square rounded-md overflow-hidden shadow-md">
+                    <Image 
+                        src={uploadedImagePreview} 
+                        alt="Uploaded preview" 
+                        layout="fill" 
+                        objectFit="contain" 
+                        data-ai-hint="uploaded image"
+                    />
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={handleClearUploadedImage} className="w-full sm:w-auto">
+                    <X className="mr-2 h-4 w-4" />
+                    Limpar Imagem Carregada
+                  </Button>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Faça upload de uma imagem se desejar que a IA a edite com base nos prompts fornecidos.
+              </p>
+            </div>
+
             <Button type="submit" disabled={isLoading} className="w-full text-lg py-6 bg-accent hover:bg-accent/90 text-accent-foreground">
               {isLoading ? (
                 <Loader2 className="mr-2 h-6 w-6 animate-spin" />
               ) : (
                 <Sparkles className="mr-2 h-6 w-6" />
               )}
-              {isLoading ? 'Gerando Imagem...' : 'Gerar Imagem'}
+              {isLoading ? 'Processando Imagem...' : (uploadedImageDataUri ? 'Editar Imagem com IA' : 'Gerar Nova Imagem')}
             </Button>
           </form>
         </CardContent>
