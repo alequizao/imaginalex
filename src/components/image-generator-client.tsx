@@ -12,12 +12,25 @@ import { Badge } from '@/components/ui/badge';
 import { generateImageWithDetailPrompts, type DetailPromptInput } from '@/ai/flows/detail-prompt';
 import ImageGalleryClient from './image-gallery-client';
 import type { GeneratedItem } from './generated-image-card-client';
-import { Sparkles, Plus, X, Loader2, Wand2, UploadCloud, Users, ImagePlus, Trash2 } from 'lucide-react';
+import { Sparkles, Plus, X, Loader2, Wand2, UploadCloud, Users, ImagePlus, Trash2, History, ClipboardCopy } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const LOCAL_STORAGE_PRIMARY_PROMPT_KEY = 'imaginalex_primary_prompt_v3';
 const LOCAL_STORAGE_DETAIL_PROMPTS_KEY = 'imaginalex_detail_prompts_v3';
+const LOCAL_STORAGE_GENERATED_ITEMS_KEY = 'imaginalex_generated_items_v1';
+const MAX_HISTORY_ITEMS = 20;
 
 interface UploadedImageFile {
   id: string;
@@ -38,6 +51,7 @@ const ImageGeneratorClient = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Load prompts from localStorage
     const savedPrimaryPrompt = localStorage.getItem(LOCAL_STORAGE_PRIMARY_PROMPT_KEY);
     if (savedPrimaryPrompt) {
       setPrimaryPrompt(savedPrimaryPrompt);
@@ -48,6 +62,16 @@ const ImageGeneratorClient = () => {
         setDetailPrompts(JSON.parse(savedDetailPrompts));
       } catch (e) {
         localStorage.removeItem(LOCAL_STORAGE_DETAIL_PROMPTS_KEY);
+      }
+    }
+
+    // Load generated items history from localStorage
+    const savedGeneratedItems = localStorage.getItem(LOCAL_STORAGE_GENERATED_ITEMS_KEY);
+    if (savedGeneratedItems) {
+      try {
+        setGeneratedItems(JSON.parse(savedGeneratedItems));
+      } catch (e) {
+        localStorage.removeItem(LOCAL_STORAGE_GENERATED_ITEMS_KEY);
       }
     }
   }, []);
@@ -130,10 +154,14 @@ const ImageGeneratorClient = () => {
         uploadedImages: imageUris.length > 0 ? imageUris : undefined,
       };
       const result = await generateImageWithDetailPrompts(input);
-      setGeneratedItems(prevItems => [
-        { id: Date.now().toString(), imageUrl: result.imageUrl, prompt: result.prompt },
-        ...prevItems,
-      ]);
+      
+      const newItem: GeneratedItem = { id: Date.now().toString(), imageUrl: result.imageUrl, prompt: result.prompt };
+      
+      setGeneratedItems(prevItems => {
+        const updatedItems = [newItem, ...prevItems].slice(0, MAX_HISTORY_ITEMS);
+        localStorage.setItem(LOCAL_STORAGE_GENERATED_ITEMS_KEY, JSON.stringify(updatedItems));
+        return updatedItems;
+      });
       
       let toastMessage = "Sua imagem foi gerada com sucesso.";
       if (imageUris.length === 1) {
@@ -157,11 +185,20 @@ const ImageGeneratorClient = () => {
     }
   };
   
+  const handleClearHistory = () => {
+    setGeneratedItems([]);
+    localStorage.removeItem(LOCAL_STORAGE_GENERATED_ITEMS_KEY);
+    toast({
+      title: "Histórico Limpo",
+      description: "Seu histórico de imagens geradas foi removido.",
+    });
+  };
+
   const getButtonText = () => {
     if (isLoading) return 'Processando Imagem...';
     const numImages = uploadedImageFiles.filter(f => f.dataUrl).length;
     if (numImages === 1) return 'Editar Imagem com IA';
-    if (numImages > 1) return `Gerar com ${numImages} Imagens de Referência`;
+    if (numImages > 1) return `Gerar com ${numImages} Imgs de Referência`;
     return 'Gerar Nova Imagem';
   };
 
@@ -310,7 +347,39 @@ const ImageGeneratorClient = () => {
         </CardContent>
       </Card>
 
-      <ImageGalleryClient items={generatedItems} />
+      <div className="mt-12 space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-semibold flex items-center text-primary">
+            <History className="mr-3 h-7 w-7" />
+            Histórico de Imagens Geradas
+          </h2>
+          {generatedItems.length > 0 && (
+             <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Limpar Histórico
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmar Limpeza do Histórico</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza de que deseja apagar todas as imagens do seu histórico local? Esta ação não pode ser desfeita.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearHistory} className={Button({variant: "destructive"}).className}>
+                    Limpar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
+        <ImageGalleryClient items={generatedItems} />
+      </div>
     </div>
   );
 };

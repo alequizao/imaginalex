@@ -1,3 +1,4 @@
+
 // src/components/generated-image-card-client.tsx
 "use client";
 
@@ -5,7 +6,7 @@ import type { FC } from 'react';
 import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Download, ClipboardCopy } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
 export interface GeneratedItem {
@@ -24,11 +25,8 @@ const GeneratedImageCardClient: FC<GeneratedImageCardClientProps> = ({ item }) =
   const handleSaveImage = async () => {
     if (!item.imageUrl) return;
     try {
-      // The imageUrl from Genkit is a data URI, which can be directly used.
-      // For other types of URLs, fetching might be needed as shown in commented code.
       const a = document.createElement('a');
       a.href = item.imageUrl;
-      // Sanitize prompt for filename
       const sanitizedPrompt = item.prompt.substring(0, 30).replace(/[^a-z0-9]/gi, '_').toLowerCase();
       a.download = `imaginalex_${sanitizedPrompt}_${item.id}.png`;
       document.body.appendChild(a);
@@ -48,6 +46,24 @@ const GeneratedImageCardClient: FC<GeneratedImageCardClientProps> = ({ item }) =
     }
   };
 
+  const handleCopyPrompt = () => {
+    navigator.clipboard.writeText(item.prompt)
+      .then(() => {
+        toast({
+          title: "Prompt Copiado!",
+          description: "O prompt foi copiado para a área de transferência.",
+        });
+      })
+      .catch(err => {
+        console.error("Error copying prompt:", err);
+        toast({
+          title: "Erro ao Copiar",
+          description: "Não foi possível copiar o prompt.",
+          variant: "destructive",
+        });
+      });
+  };
+
   return (
     <Card className="overflow-hidden shadow-lg animate-fadeIn bg-card text-card-foreground">
       <CardHeader>
@@ -64,8 +80,13 @@ const GeneratedImageCardClient: FC<GeneratedImageCardClientProps> = ({ item }) =
             className="transition-transform duration-300 ease-in-out hover:scale-105"
           />
         </div>
-        <CardDescription className="text-xs h-16 overflow-y-auto p-1 border rounded-md bg-muted/50">
+        <CardDescription 
+            className="text-xs h-16 overflow-y-auto p-2 border rounded-md bg-muted/50 cursor-pointer hover:bg-muted/70 transition-colors"
+            onClick={handleCopyPrompt}
+            title="Clique para copiar o prompt"
+        >
           <span className="font-semibold">Prompt:</span> {item.prompt}
+          <ClipboardCopy className="inline-block h-3 w-3 ml-1 opacity-50 group-hover:opacity-100" />
         </CardDescription>
       </CardContent>
       <CardFooter>
