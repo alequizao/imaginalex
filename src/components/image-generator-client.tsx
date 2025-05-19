@@ -12,12 +12,19 @@ import { Badge } from '@/components/ui/badge';
 import { generateImageWithDetailPrompts, type DetailPromptInput } from '@/ai/flows/detail-prompt';
 import ImageGalleryClient from './image-gallery-client';
 import type { GeneratedItem } from './generated-image-card-client';
-import { Sparkles, Plus, X, Loader2, Wand2, UploadCloud, Users } from 'lucide-react';
+import { Sparkles, Plus, X, Loader2, Wand2, UploadCloud, Users, ImagePlus, Trash2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from '@/components/ui/textarea';
 
-const LOCAL_STORAGE_PRIMARY_PROMPT_KEY = 'imaginalex_primary_prompt_v2';
-const LOCAL_STORAGE_DETAIL_PROMPTS_KEY = 'imaginalex_detail_prompts_v2';
+const LOCAL_STORAGE_PRIMARY_PROMPT_KEY = 'imaginalex_primary_prompt_v3';
+const LOCAL_STORAGE_DETAIL_PROMPTS_KEY = 'imaginalex_detail_prompts_v3';
+
+interface UploadedImageFile {
+  id: string;
+  previewUrl: string;
+  dataUrl: string;
+  fileInputRef: React.RefObject<HTMLInputElement>;
+}
 
 const ImageGeneratorClient = () => {
   const [primaryPrompt, setPrimaryPrompt] = useState<string>('');
@@ -26,13 +33,7 @@ const ImageGeneratorClient = () => {
   const [generatedItems, setGeneratedItems] = useState<GeneratedItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
-  const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
-  const [uploadedImageDataUri, setUploadedImageDataUri] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [uploadedImagePreview2, setUploadedImagePreview2] = useState<string | null>(null);
-  const [uploadedImageDataUri2, setUploadedImageDataUri2] = useState<string | null>(null);
-  const fileInputRef2 = useRef<HTMLInputElement>(null);
+  const [uploadedImageFiles, setUploadedImageFiles] = useState<UploadedImageFile[]>([]);
 
   const { toast } = useToast();
 
@@ -72,85 +73,73 @@ const ImageGeneratorClient = () => {
     localStorage.setItem(LOCAL_STORAGE_DETAIL_PROMPTS_KEY, JSON.stringify(newDetailPrompts));
   };
 
-  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, imageNumber: 1 | 2) => {
+  const handleAddImageSlot = () => {
+    const newImageFile: UploadedImageFile = {
+      id: `image-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      previewUrl: '',
+      dataUrl: '',
+      fileInputRef: React.createRef<HTMLInputElement>(),
+    };
+    setUploadedImageFiles(prev => [...prev, newImageFile]);
+  };
+
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, imageId: string) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
-        if (imageNumber === 1) {
-          setUploadedImagePreview(result);
-          setUploadedImageDataUri(result);
-        } else {
-          setUploadedImagePreview2(result);
-          setUploadedImageDataUri2(result);
-        }
+        setUploadedImageFiles(prevFiles => 
+          prevFiles.map(imgFile => 
+            imgFile.id === imageId ? { ...imgFile, previewUrl: result, dataUrl: result } : imgFile
+          )
+        );
       };
       reader.readAsDataURL(file);
     } else {
-      if (imageNumber === 1) {
-        setUploadedImagePreview(null);
-        setUploadedImageDataUri(null);
-      } else {
-        setUploadedImagePreview2(null);
-        setUploadedImageDataUri2(null);
-      }
+       setUploadedImageFiles(prevFiles => 
+        prevFiles.map(imgFile => 
+          imgFile.id === imageId ? { ...imgFile, previewUrl: '', dataUrl: '' } : imgFile
+        )
+      );
     }
   };
 
-  const handleClearUploadedImage = (imageNumber: 1 | 2) => {
-    if (imageNumber === 1) {
-      setUploadedImagePreview(null);
-      setUploadedImageDataUri(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    } else {
-      setUploadedImagePreview2(null);
-      setUploadedImageDataUri2(null);
-      if (fileInputRef2.current) {
-        fileInputRef2.current.value = "";
-      }
-    }
+  const handleRemoveImageSlot = (imageId: string) => {
+    setUploadedImageFiles(prevFiles => prevFiles.filter(imgFile => imgFile.id !== imageId));
   };
+
 
   const handleGenerateImage = async (e: FormEvent) => {
     e.preventDefault();
     if (!primaryPrompt.trim()) {
       toast({
         title: "Prompt Primário Necessário",
-        description: "Por favor, insira um prompt primário para gerar, editar ou mesclar imagens.",
+        description: "Por favor, insira um prompt primário para gerar, editar ou referenciar imagens.",
         variant: "destructive",
       });
       return;
     }
-    if (uploadedImageDataUri2 && !uploadedImageDataUri) {
-        toast({
-            title: "Primeira Imagem Necessária",
-            description: "Por favor, carregue a primeira imagem se quiser usar a funcionalidade de mesclagem com uma segunda imagem.",
-            variant: "destructive",
-        });
-        return;
-    }
 
     setIsLoading(true);
     try {
+      const imageUris = uploadedImageFiles.map(f => f.dataUrl).filter(Boolean);
       const input: DetailPromptInput = {
         primaryPrompt,
         detailPrompts,
-        uploadedImage: uploadedImageDataUri || undefined,
-        uploadedImage2: uploadedImageDataUri2 || undefined,
+        uploadedImages: imageUris.length > 0 ? imageUris : undefined,
       };
       const result = await generateImageWithDetailPrompts(input);
       setGeneratedItems(prevItems => [
         { id: Date.now().toString(), imageUrl: result.imageUrl, prompt: result.prompt },
         ...prevItems,
       ]);
+      
       let toastMessage = "Sua imagem foi gerada com sucesso.";
-      if (uploadedImageDataUri && uploadedImageDataUri2) {
-        toastMessage = "Sua tentativa de mesclagem de imagem foi processada.";
-      } else if (uploadedImageDataUri) {
+      if (imageUris.length === 1) {
         toastMessage = "Sua imagem foi editada com sucesso.";
+      } else if (imageUris.length > 1) {
+        toastMessage = `Sua imagem foi gerada com base em ${imageUris.length} referências.`;
       }
       toast({
         title: "Imagem Processada!",
@@ -170,10 +159,19 @@ const ImageGeneratorClient = () => {
   
   const getButtonText = () => {
     if (isLoading) return 'Processando Imagem...';
-    if (uploadedImageDataUri && uploadedImageDataUri2) return 'Mesclar Imagens com IA';
-    if (uploadedImageDataUri) return 'Editar Imagem com IA';
+    const numImages = uploadedImageFiles.filter(f => f.dataUrl).length;
+    if (numImages === 1) return 'Editar Imagem com IA';
+    if (numImages > 1) return `Gerar com ${numImages} Imagens de Referência`;
     return 'Gerar Nova Imagem';
   };
+
+  const getButtonIcon = () => {
+    if (isLoading) return <Loader2 className="mr-2 h-6 w-6 animate-spin" />;
+    const numImages = uploadedImageFiles.filter(f => f.dataUrl).length;
+    if (numImages === 1) return <Wand2 className="mr-2 h-6 w-6" />;
+    if (numImages > 1) return <Users className="mr-2 h-6 w-6" />;
+    return <Sparkles className="mr-2 h-6 w-6" />;
+  }
 
   return (
     <div className="w-full max-w-4xl space-y-8">
@@ -181,10 +179,10 @@ const ImageGeneratorClient = () => {
         <CardHeader>
           <CardTitle className="text-2xl flex items-center gap-2 text-primary">
             <Wand2 className="h-6 w-6" />
-            Criador, Editor e Mesclador de Imagens IA
+            Criador, Editor e Referenciador de Imagens IA
           </CardTitle>
           <CardDescription>
-            Defina seu prompt, adicione detalhes e opcionalmente carregue uma ou duas imagens para edição/mesclagem.
+            Defina seu prompt, adicione detalhes e opcionalmente carregue uma ou mais imagens para edição/referência.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -195,7 +193,7 @@ const ImageGeneratorClient = () => {
                 id="primary-prompt"
                 value={primaryPrompt}
                 onChange={handlePrimaryPromptChange}
-                placeholder="Ex: Um astronauta... Combine as pessoas em uma paisagem cyberpunk..."
+                placeholder="Ex: Um astronauta em Marte, estilo Van Gogh..."
                 className="mt-2 min-h-[100px] text-base"
                 required
               />
@@ -240,95 +238,72 @@ const ImageGeneratorClient = () => {
               )}
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="image-upload-1" className="text-lg font-medium text-foreground">
-                  Imagem 1 (Base para Edição/Mesclagem)
-                </Label>
-                <div className="mt-2 flex items-center gap-2 p-4 border-2 border-dashed border-border rounded-lg hover:border-primary transition-colors">
-                  <UploadCloud className="h-8 w-8 text-muted-foreground"/>
-                  <Input
-                    id="image-upload-1"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, 1)}
-                    ref={fileInputRef}
-                    className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                  />
-                </div>
-                {uploadedImagePreview && (
-                  <div className="mt-4 space-y-3 p-4 border rounded-md bg-muted/20">
-                    <p className="text-sm font-medium text-foreground">Pré-visualização Imagem 1:</p>
-                    <div className="relative w-full max-w-xs mx-auto aspect-square rounded-md overflow-hidden shadow-md">
-                      <Image 
-                          src={uploadedImagePreview} 
-                          alt="Uploaded preview 1" 
-                          layout="fill" 
-                          objectFit="contain" 
-                          data-ai-hint="uploaded image person"
-                      />
+            <div className="space-y-4">
+              <Label className="text-lg font-medium text-foreground">
+                Imagens Carregadas (para edição ou referência)
+              </Label>
+              {uploadedImageFiles.map((imgFile, index) => (
+                <Card key={imgFile.id} className="p-4 bg-muted/30">
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="flex-grow w-full sm:w-auto">
+                       <Label htmlFor={`image-upload-${imgFile.id}`} className="text-sm font-medium text-foreground mb-1 block">
+                         Imagem {index + 1}
+                       </Label>
+                      <div className="flex items-center gap-2 p-3 border-2 border-dashed border-border rounded-lg hover:border-primary transition-colors bg-background">
+                        <UploadCloud className="h-6 w-6 text-muted-foreground"/>
+                        <Input
+                          id={`image-upload-${imgFile.id}`}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleImageUpload(e, imgFile.id)}
+                          ref={imgFile.fileInputRef}
+                          className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        />
+                      </div>
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => handleClearUploadedImage(1)} className="w-full sm:w-auto">
-                      <X className="mr-2 h-4 w-4" />
-                      Limpar Imagem 1
-                    </Button>
+                    {imgFile.previewUrl && (
+                      <div className="flex-shrink-0 space-y-2 text-center">
+                        <p className="text-xs font-medium text-foreground">Pré-visualização:</p>
+                        <div className="relative w-24 h-24 mx-auto aspect-square rounded-md overflow-hidden shadow-md border bg-card">
+                          <Image 
+                              src={imgFile.previewUrl} 
+                              alt={`Uploaded preview ${index + 1}`}
+                              layout="fill" 
+                              objectFit="contain" 
+                              data-ai-hint="uploaded image abstract"
+                          />
+                        </div>
+                      </div>
+                    )}
+                     <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleRemoveImageSlot(imgFile.id)}
+                        className="text-destructive hover:bg-destructive/10 flex-shrink-0"
+                        aria-label={`Remover Imagem ${index + 1}`}
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </Button>
                   </div>
-                )}
-                 <p className="text-xs text-muted-foreground mt-1">
-                  Carregue a primeira imagem para edição ou para ser a base da mesclagem.
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="image-upload-2" className="text-lg font-medium text-foreground">
-                  Imagem 2 (Para Mesclagem - Opcional)
-                </Label>
-                <div className="mt-2 flex items-center gap-2 p-4 border-2 border-dashed border-border rounded-lg hover:border-primary transition-colors">
-                  <UploadCloud className="h-8 w-8 text-muted-foreground"/>
-                  <Input
-                    id="image-upload-2"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, 2)}
-                    ref={fileInputRef2}
-                    className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                  />
-                </div>
-                {uploadedImagePreview2 && (
-                  <div className="mt-4 space-y-3 p-4 border rounded-md bg-muted/20">
-                    <p className="text-sm font-medium text-foreground">Pré-visualização Imagem 2:</p>
-                    <div className="relative w-full max-w-xs mx-auto aspect-square rounded-md overflow-hidden shadow-md">
-                      <Image 
-                          src={uploadedImagePreview2} 
-                          alt="Uploaded preview 2" 
-                          layout="fill" 
-                          objectFit="contain" 
-                          data-ai-hint="uploaded image person"
-                      />
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => handleClearUploadedImage(2)} className="w-full sm:w-auto">
-                      <X className="mr-2 h-4 w-4" />
-                      Limpar Imagem 2
-                    </Button>
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  Carregue uma segunda imagem se desejar tentar mesclar pessoas de duas fontes.
-                </p>
-              </div>
+                </Card>
+              ))}
+              <Button type="button" variant="outline" onClick={handleAddImageSlot} className="w-full sm:w-auto">
+                <ImagePlus className="mr-2 h-5 w-5" />
+                Adicionar Imagem
+              </Button>
+               <p className="text-xs text-muted-foreground mt-1">
+                 Carregue uma imagem para edição, ou múltiplas imagens para usar como referência/inspiração.
+               </p>
             </div>
 
             <Button type="submit" disabled={isLoading} className="w-full text-lg py-6 bg-accent hover:bg-accent/90 text-accent-foreground">
-              {isLoading ? (
-                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-              ) : (
-                (uploadedImageDataUri && uploadedImageDataUri2) ? <Users className="mr-2 h-6 w-6" /> : <Sparkles className="mr-2 h-6 w-6" />
-              )}
+              {getButtonIcon()}
               {getButtonText()}
             </Button>
-            {uploadedImageDataUri && uploadedImageDataUri2 && (
+            {uploadedImageFiles.filter(f => f.dataUrl).length > 1 && (
                  <p className="text-xs text-center text-muted-foreground mt-2">
-                    Nota: A mesclagem de imagens é experimental. Os resultados podem variar e a fidelidade facial pode não ser perfeita.
+                    Nota: Usar múltiplas imagens como referência é experimental. Os resultados podem variar.
                  </p>
             )}
           </form>
@@ -341,6 +316,3 @@ const ImageGeneratorClient = () => {
 };
 
 export default ImageGeneratorClient;
-
-
-    
