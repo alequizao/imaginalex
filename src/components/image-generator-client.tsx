@@ -30,7 +30,7 @@ import {
 const LOCAL_STORAGE_PRIMARY_PROMPT_KEY = 'imaginalex_primary_prompt_v3';
 const LOCAL_STORAGE_DETAIL_PROMPTS_KEY = 'imaginalex_detail_prompts_v3';
 const LOCAL_STORAGE_GENERATED_ITEMS_KEY = 'imaginalex_generated_items_v1';
-const MAX_HISTORY_ITEMS = 20;
+const MAX_HISTORY_ITEMS = 5; // Reduced from 20
 
 interface UploadedImageFile {
   id: string;
@@ -61,6 +61,7 @@ const ImageGeneratorClient = () => {
       try {
         setDetailPrompts(JSON.parse(savedDetailPrompts));
       } catch (e) {
+        console.error("Failed to parse detail prompts from localStorage:", e);
         localStorage.removeItem(LOCAL_STORAGE_DETAIL_PROMPTS_KEY);
       }
     }
@@ -71,6 +72,7 @@ const ImageGeneratorClient = () => {
       try {
         setGeneratedItems(JSON.parse(savedGeneratedItems));
       } catch (e) {
+        console.error("Failed to parse generated items from localStorage:", e);
         localStorage.removeItem(LOCAL_STORAGE_GENERATED_ITEMS_KEY);
       }
     }
@@ -86,15 +88,33 @@ const ImageGeneratorClient = () => {
     if (detailPromptInput.trim() !== '' && !detailPrompts.includes(detailPromptInput.trim())) {
       const newDetailPrompts = [...detailPrompts, detailPromptInput.trim()];
       setDetailPrompts(newDetailPrompts);
-      localStorage.setItem(LOCAL_STORAGE_DETAIL_PROMPTS_KEY, JSON.stringify(newDetailPrompts));
-      setDetailPromptInput('');
+      try {
+        localStorage.setItem(LOCAL_STORAGE_DETAIL_PROMPTS_KEY, JSON.stringify(newDetailPrompts));
+      } catch (error) {
+        console.error("Error saving detail prompts to localStorage:", error);
+        toast({
+          title: "Erro ao Salvar Detalhes",
+          description: "Não foi possível salvar os prompts de detalhe no armazenamento local.",
+          variant: "destructive",
+        });
+      }
     }
+    setDetailPromptInput('');
   };
 
   const handleRemoveDetailPrompt = (promptToRemove: string) => {
     const newDetailPrompts = detailPrompts.filter(p => p !== promptToRemove);
     setDetailPrompts(newDetailPrompts);
-    localStorage.setItem(LOCAL_STORAGE_DETAIL_PROMPTS_KEY, JSON.stringify(newDetailPrompts));
+    try {
+      localStorage.setItem(LOCAL_STORAGE_DETAIL_PROMPTS_KEY, JSON.stringify(newDetailPrompts));
+    } catch (error) {
+        console.error("Error saving detail prompts to localStorage:", error);
+         toast({
+          title: "Erro ao Salvar Detalhes",
+          description: "Não foi possível salvar os prompts de detalhe no armazenamento local.",
+          variant: "destructive",
+        });
+    }
   };
 
   const handleAddImageSlot = () => {
@@ -159,7 +179,24 @@ const ImageGeneratorClient = () => {
       
       setGeneratedItems(prevItems => {
         const updatedItems = [newItem, ...prevItems].slice(0, MAX_HISTORY_ITEMS);
-        localStorage.setItem(LOCAL_STORAGE_GENERATED_ITEMS_KEY, JSON.stringify(updatedItems));
+        try {
+          localStorage.setItem(LOCAL_STORAGE_GENERATED_ITEMS_KEY, JSON.stringify(updatedItems));
+        } catch (error: any) {
+          console.error("Error saving generated items to localStorage:", error);
+          if (error.name === 'QuotaExceededError' || (error instanceof DOMException && error.name === 'QuotaExceededError')) {
+            toast({
+              title: "Erro ao Salvar Histórico",
+              description: "O armazenamento local está cheio. Não foi possível salvar esta imagem no histórico. Tente limpar o histórico.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Erro ao Salvar Histórico",
+              description: "Não foi possível salvar esta imagem no histórico.",
+              variant: "destructive",
+            });
+          }
+        }
         return updatedItems;
       });
       
