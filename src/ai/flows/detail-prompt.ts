@@ -19,7 +19,7 @@ const DetailPromptInputSchema = z.object({
   primaryPrompt: z.string().describe('The primary prompt for image generation, editing, or referencing.'),
   detailPrompts: z.array(z.string()).describe('An array of detail prompts to enhance the primary prompt.'),
   uploadedImages: z.array(z.string()).optional().describe(
-    "Optional. An array of uploaded images to be edited (if single) or used as reference/inspiration (if multiple), as data URIs. Format: 'data:<mimetype>;base64,<encoded_data>'."
+    "Optional. An array of uploaded images. If one image, it's for editing. If multiple, they are for reference/inspiration, as data URIs. Format: 'data:<mimetype>;base64,<encoded_data>'."
   ),
 });
 export type DetailPromptInput = z.infer<typeof DetailPromptInputSchema>;
@@ -63,7 +63,7 @@ const detailPromptFlow = ai.defineFlow(
     }
 
     let modelPromptParts: any[] = [];
-    let operationType = "Gerando nova imagem";
+    // let operationType = "Gerando nova imagem"; // operationType não é mais usado, mas pode ser útil para logs futuros
 
     if (uploadedImages && uploadedImages.length > 0) {
       if (uploadedImages.length === 1) {
@@ -72,16 +72,16 @@ const detailPromptFlow = ai.defineFlow(
         const editText = `Edite a imagem fornecida. ${textInstruction} ${preserveFaceInstruction}`;
         modelPromptParts.push({media: {url: uploadedImages[0]}});
         modelPromptParts.push({text: editText});
-        operationType = "Editando imagem";
+        // operationType = "Editando imagem";
         userFacingPromptSummary = `(Editando 1 imagem) ${userFacingPromptSummary}`;
       } else {
         // Use multiple images as reference/inspiration
-        const referenceText = `Considere as seguintes ${uploadedImages.length} imagens como referência ou inspiração. ${textInstruction}. Tente combinar elementos ou estilos das imagens de referência no resultado final, conforme descrito pelo prompt. Se houver pessoas nas imagens de referência, tente manter suas características gerais se fizerem parte do prompt.`;
+        const referenceText = `Use as ${uploadedImages.length} imagens a seguir como referência. Seu objetivo é unir as pessoas presentes nessas fotos em um único cenário coeso, descrito por: ${textInstruction}. Tente manter as características distintivas das pessoas de cada foto ao combiná-las na nova cena.`;
         modelPromptParts.push({text: referenceText});
         uploadedImages.forEach(imgDataUri => {
           modelPromptParts.push({media: {url: imgDataUri}});
         });
-        operationType = `Usando ${uploadedImages.length} imagens como referência`;
+        // operationType = `Usando ${uploadedImages.length} imagens como referência`;
         userFacingPromptSummary = `(Referenciando ${uploadedImages.length} imagens) ${userFacingPromptSummary}`;
       }
     } else {
@@ -92,8 +92,8 @@ const detailPromptFlow = ai.defineFlow(
     }
     
     // If only one part and it's text, modelPrompt can be a string. Otherwise, it's an array.
-    const finalModelPrompt = modelPromptParts.length === 1 && typeof modelPromptParts[0] === 'string' 
-      ? modelPromptParts[0]
+    const finalModelPrompt = modelPromptParts.length === 1 && modelPromptParts[0].text && !modelPromptParts[0].media
+      ? modelPromptParts[0].text
       : modelPromptParts.every(part => part.text && !part.media) 
       ? modelPromptParts.map(p => p.text).join(" ")
       : modelPromptParts;
@@ -113,3 +113,4 @@ const detailPromptFlow = ai.defineFlow(
     };
   }
 );
+
