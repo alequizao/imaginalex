@@ -5,14 +5,14 @@
 import React, { useState, useEffect, type ChangeEvent, type FormEvent, useRef } from 'react';
 import Image from 'next/image';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button'; // Import buttonVariants
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { generateImageWithDetailPrompts, type DetailPromptInput } from '@/ai/flows/detail-prompt';
 import ImageGalleryClient from './image-gallery-client';
 import type { GeneratedItem } from './generated-image-card-client';
-import { Sparkles, Plus, X, Loader2, Wand2, UploadCloud, Users, ImagePlus, Trash2, History, ClipboardCopy } from 'lucide-react';
+import { Sparkles, Plus, X, Loader2, Wand2, UploadCloud, Users, ImagePlus, Trash2, History } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -370,7 +370,7 @@ const ImageGeneratorClient = () => {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleClearHistory} className={Button({variant: "destructive"}).className}>
+                  <AlertDialogAction onClick={handleClearHistory} className={buttonVariants({variant: "destructive"})}>
                     Limpar
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -385,3 +385,4 @@ const ImageGeneratorClient = () => {
 };
 
 export default ImageGeneratorClient;
+
