@@ -1,7 +1,3 @@
-/*
- * ImaginAlex · Desenvolvido por Alequizao <alequizao.dev@gmail.com>
- * https://github.com/alequizao · © 2026 Alequizao. Todos os direitos reservados.
- */
 import ImageGeneratorClient from '@/components/image-generator-client';
 import { Palette } from 'lucide-react'; // Or any other suitable icon
 
